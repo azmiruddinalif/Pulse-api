@@ -1,0 +1,55 @@
+name: Build & Release Pulse Desktop
+
+on:
+  push:
+    branches: [ main, master ]
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Build production bundle
+        run: npm run build
+
+      - name: Package application files
+        shell: pwsh
+        run: |
+          mkdir release_dist
+          Copy-Item -Path "dist" -Destination "release_dist/dist" -Recurse
+          Copy-Item -Path "dist-electron" -Destination "release_dist/dist-electron" -Recurse
+          Copy-Item -Path "package.json" -Destination "release_dist/package.json"
+          Compress-Archive -Path "release_dist/*" -DestinationPath "Pulse-Windows-x64.zip"
+
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Pulse-Windows-x64
+          path: Pulse-Windows-x64.zip
+
+      - name: Create GitHub Release (on tag)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: Pulse-Windows-x64.zip
+          generate_release_notes: true
